@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { v4 as uuid } from "uuid";
 
-const socket = io("http://localhost:4000");
+const socket = io("http://localhost:4000"); // Change if deployed
 
 const ChatApp = ({ username }) => {
   const [input, setInput] = useState("");
@@ -10,6 +10,7 @@ const ChatApp = ({ username }) => {
   const [usersOnline, setUsersOnline] = useState([]);
   const [typingUser, setTypingUser] = useState("");
   const messageEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const scrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -20,6 +21,7 @@ const ChatApp = ({ username }) => {
       const newMsg = { id: uuid(), user: username, text: input };
       socket.emit("sendMessage", newMsg);
       setInput("");
+      socket.emit("stopTyping", username); // Send username when stopping typing
     }
   };
 
@@ -27,39 +29,45 @@ const ChatApp = ({ username }) => {
     socket.emit("deleteMessage", id);
   };
 
+  const handleTyping = (e) => {
+    setInput(e.target.value);
+
+    socket.emit("typing", username);
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("stopTyping", username); // Send username when stopping typing
+    }, 1500);
+  };
+
   useEffect(() => {
     socket.emit("join", username);
 
     socket.on("chatHistory", (data) => setMessages(data));
-    socket.on("receiveMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-    });
-    socket.on("updateUsers", (userList) => {
-      setUsersOnline(userList);
-    });
+    socket.on("receiveMessage", (msg) => setMessages((prev) => [...prev, msg]));
+    socket.on("updateUsers", (userList) => setUsersOnline(userList));
     socket.on("userTyping", (user) => {
-      if (user !== username) {
-        setTypingUser(user);
-        setTimeout(() => setTypingUser(""), 2000);
+      if (user !== username) setTypingUser(user);
+    });
+
+    socket.on("stopTyping", (user) => {
+      if (user === typingUser) {
+        setTypingUser("");
       }
     });
 
     return () => {
+      socket.emit("leave", username);
       socket.off("chatHistory");
       socket.off("receiveMessage");
       socket.off("updateUsers");
       socket.off("userTyping");
+      socket.off("stopTyping");
     };
-  }, [username]);
+  }, [username, typingUser]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const handleTyping = (e) => {
-    setInput(e.target.value);
-    socket.emit("typing", username);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a2a6c] via-[#b21f1f] to-[#fdbb2d] text-white p-4">
@@ -70,26 +78,16 @@ const ChatApp = ({ username }) => {
 
           <div className="bg-[#1e2738] p-4 h-[400px] overflow-y-scroll mb-2 rounded-lg flex flex-col gap-2">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.user === username ? "justify-start" : "justify-end"
-                }`}
-              >
-                <div
-                  className={`p-3 rounded-xl text-sm max-w-[70%] break-words ${
-                    msg.user === username
-                      ? "bg-blue-600 text-left"
-                      : "bg-purple-700 text-right"
-                  }`}
-                >
+              <div key={msg.id} className={`flex ${msg.user === username ? "justify-start" : "justify-end"}`}>
+                <div className={`p-3 rounded-xl text-sm max-w-[70%] break-words ${
+                  msg.user === username
+                    ? "bg-blue-600 text-left"
+                    : "bg-purple-700 text-right"
+                }`}>
                   <span className="font-bold block text-white">{msg.user}</span>
                   <span className="block">{msg.text}</span>
                   {msg.user === username && (
-                    <button
-                      onClick={() => deleteMessage(msg.id)}
-                      className="mt-1 text-red-300 text-xs hover:text-red-500"
-                    >
+                    <button onClick={() => deleteMessage(msg.id)} className="mt-1 text-red-300 text-xs hover:text-red-500">
                       Delete
                     </button>
                   )}

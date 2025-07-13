@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -13,7 +13,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // No trailing slash
+    origin: "http://localhost:5173", // Match your frontend
     methods: ["GET", "POST"],
   },
 });
@@ -58,7 +58,12 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("userTyping", username);
   });
 
-  // Handle user disconnect
+  // ✅ FIXED: Handle stopTyping with username
+  socket.on("stopTyping", (username) => {
+    socket.broadcast.emit("stopTyping", username);
+  });
+
+  // User disconnects
   socket.on("disconnect", () => {
     if (socket.username) {
       console.log(`${socket.username} disconnected`);

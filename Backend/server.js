@@ -2,6 +2,11 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
+import dotenv from "dotenv"
+
+dotenv.config();
+
+const PORT = process.env.PORT || 3000;
 
 const app = express();
 const server = http.createServer(app);
